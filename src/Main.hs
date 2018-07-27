@@ -6,6 +6,7 @@ import qualified Data.ByteString            as ByteString (writeFile)
 import qualified Data.ByteString.Char8      as ByteString (pack, putStr)
 import qualified Data.ByteString.Lazy.Char8 as ByteStringL (putStrLn)
 import qualified Data.HashMap.Strict        as HashMap (insert, lookup)
+import Data.Semigroup ((<>))
 import qualified Data.Text                  as Text (pack)
 import qualified Data.Vector                as Vector (cons)
 import           Data.Yaml                  hiding (Parser)
@@ -14,6 +15,7 @@ import           System.Directory
 import           System.Exit                (exitFailure)
 import           System.FilePath
 import           System.IO                  (hPutStrLn, stderr)
+import Data.List.Split
 
 data Command = CommandAdd String String
              | CommandGet String
@@ -83,7 +85,7 @@ run (Options (optCommand, CommonOptions coptStdout (Just coptPath))) = do
         Right input -> do
             r <- case optCommand of
                 CommandAdd k v -> runAdd input k v
-                CommandSet k v -> runSet input k v
+                CommandSet k v -> runSet input (splitOn "::" k) v
                 CommandGet k -> runGet input k
                 CommandJSON -> runJSON input
             finish r
@@ -117,7 +119,12 @@ runGet (Object o) k = case HashMap.lookup (Text.pack k) o of
         return Nothing
 runGet _ _ = error "Not implemented"
 
-runSet :: Monad m => Value -> String -> String -> m (Maybe Value)
-runSet (Object o) k v =
-    return $ Just (Object (HashMap.insert (Text.pack k) (String (Text.pack v)) o))
+runSet :: Monad m => Value -> [String] -> String -> m (Maybe Value)
+runSet (Object o) (k:[]) v =
+  return $ Just (Object (HashMap.insert (Text.pack k) (String (Text.pack v)) o))
+runSet (Object o) (k:kx) v = case HashMap.lookup (Text.pack k) o of
+    Nothing -> error "Key is not here"
+    Just i -> case runSet (Object o) kx v of
+        Nothing -> error "Key in not set"
+        Just l -> return $ Just (Object (HashMap.insert (Text.pack k) l o))
 runSet _ _ _ = error "Not implemented"
