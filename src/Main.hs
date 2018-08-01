@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
@@ -5,17 +6,17 @@ import qualified Data.Aeson                 as Aeson
 import qualified Data.ByteString            as ByteString (writeFile)
 import qualified Data.ByteString.Char8      as ByteString (pack, putStr)
 import qualified Data.ByteString.Lazy.Char8 as ByteStringL (putStrLn)
-import qualified Data.HashMap.Strict        as HashMap (insert, lookup)
-import Data.Semigroup ((<>))
-import qualified Data.Text                  as Text (pack)
-import qualified Data.Vector                as Vector (cons)
+import qualified Data.HashMap.Strict        as HashMap
+import           Data.Semigroup             ((<>))
+import           Data.Text                  (Text)
+import qualified Data.Text                  as Text
+import qualified Data.Vector                as Vector
 import           Data.Yaml                  hiding (Parser)
 import           Options.Applicative
 import           System.Directory
 import           System.Exit                (exitFailure)
 import           System.FilePath
 import           System.IO                  (hPutStrLn, stderr)
-import Data.List.Split
 
 data Command = CommandAdd String String
              | CommandGet String
@@ -85,13 +86,13 @@ run (Options (optCommand, CommonOptions coptStdout (Just coptPath))) = do
         Right input -> do
             r <- case optCommand of
                 CommandAdd k v -> runAdd input k v
-                CommandSet k v -> runSet input (splitOn "::" k) v
+                CommandSet k v -> runSet input (Text.splitOn "::" (Text.pack k)) v
                 CommandGet k -> runGet input k
                 CommandJSON -> runJSON input
             finish r
   where
     finish :: Maybe Value -> IO ()
-    finish Nothing = return ()
+    finish Nothing  = return ()
     finish (Just o) | coptStdout = ByteString.putStr (encode o)
     finish (Just o) = ByteString.writeFile coptPath (encode o)
 
@@ -100,14 +101,13 @@ runJSON v = do
     ByteStringL.putStrLn (Aeson.encode v)
     return Nothing
 
-runAdd :: Monad m => Value -> String -> String -> m (Maybe Value)
+runAdd :: Value -> String -> String -> IO (Maybe Value)
 runAdd (Object o) k v = case HashMap.lookup (Text.pack k) o of
     Nothing -> error "Key is not there"
-    Just (Array a) -> case decode (ByteString.pack v) of
-        Nothing -> error "Can't encode value as YAML"
-        Just v' -> do
-            let a' = Vector.cons v' a
-            return $ Just (Object (HashMap.insert (Text.pack k) (Array a') o))
+    Just (Array a) -> do
+      v' <- decodeThrow (ByteString.pack v)
+      let a' = Vector.cons v' a
+      return $ Just (Object (HashMap.insert (Text.pack k) (Array a') o))
     _ -> error "Key is not an Array"
 runAdd _ _ _ = error "Not implemented"
 
@@ -119,12 +119,12 @@ runGet (Object o) k = case HashMap.lookup (Text.pack k) o of
         return Nothing
 runGet _ _ = error "Not implemented"
 
-runSet :: Monad m => Value -> [String] -> String -> m (Maybe Value)
+runSet :: Monad m => Value -> [Text] -> String -> m (Maybe Value)
 runSet (Object o) (k:[]) v =
-  return $ Just (Object (HashMap.insert (Text.pack k) (String (Text.pack v)) o))
-runSet (Object o) (k:kx) v = case HashMap.lookup (Text.pack k) o of
+  return $ Just (Object (HashMap.insert k (String (Text.pack v)) o))
+runSet (Object o) (k:kx) v = case HashMap.lookup k o of
     Nothing -> error "Key is not here"
-    Just i -> case runSet (Object o) kx v of
+    Just _ -> runSet (Object o) kx v >>= \case
         Nothing -> error "Key in not set"
-        Just l -> return $ Just (Object (HashMap.insert (Text.pack k) l o))
+        Just v' ->  pure $ Just (Object (HashMap.insert k v' o))
 runSet _ _ _ = error "Not implemented"
