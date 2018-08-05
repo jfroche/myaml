@@ -1,13 +1,13 @@
 module Main where
 
 import qualified Data.Aeson                 as Aeson
-import           Data.Aeson.Lens (key)
+import           Data.Aeson.Lens            (key)
 import qualified Data.HashMap.Strict        as HashMap
 import qualified Data.Text                  as Text
 import qualified Data.Text.Encoding         as Text
 import qualified Data.Vector                as Vector
 import           Data.Yaml
-import qualified Data.Yaml.Pretty as Pretty
+import qualified Data.Yaml.Pretty           as Pretty
 import           Options.Applicative
 
 import           Cli
@@ -25,9 +25,9 @@ run (Options fp cmd)  = do
 
 runOptions :: Value -> FilePath -> SubCommand -> IO ()
 runOptions s fp = \case
-  Get k -> do
-    let v = s ^? key k
-    maybe (panic ( k <> " was not found")) stdout v
+  Get k -> case s ^? key k of
+    Nothing -> ppFailure ( pretty k <> " was not found")
+    Just v  -> stdout v
   Add (Update k v inplace) -> runAdd s k v >>= finish inplace fp
   Set (Update k v inplace) -> runSet s (Text.splitOn "::" k) v >>= finish inplace fp
   Json -> stdout s

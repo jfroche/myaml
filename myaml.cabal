@@ -34,6 +34,8 @@ executable myaml
                      , lens-aeson >= 1.0
                      , optparse-applicative
                      , protolude >= 0.2
+                     , prettyprinter
+                     , prettyprinter-ansi-terminal >= 1.1
                      , text
                      , text >= 1.2.1.3
                      , unordered-containers
