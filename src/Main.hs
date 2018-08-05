@@ -1,13 +1,13 @@
 module Main where
 
 import qualified Data.Aeson                 as Aeson
-import qualified Data.Aeson.Encode.Pretty   as Aeson
 import           Data.Aeson.Lens (key)
 import qualified Data.HashMap.Strict        as HashMap
 import qualified Data.Text                  as Text
 import qualified Data.Text.Encoding         as Text
 import qualified Data.Vector                as Vector
 import           Data.Yaml
+import qualified Data.Yaml.Pretty as Pretty
 import           Options.Applicative
 
 import           Cli
@@ -27,13 +27,13 @@ runOptions :: Value -> FilePath -> SubCommand -> IO ()
 runOptions s fp = \case
   Get k -> do
     let v = s ^? key k
-    stdout s
+    maybe (panic ( k <> " was not found")) stdout v
   Add (Update k v inplace) -> runAdd s k v >>= finish inplace fp
   Set (Update k v inplace) -> runSet s (Text.splitOn "::" k) v >>= finish inplace fp
   Json -> stdout s
 
   where
-    stdout = putLByteString . Aeson.encodePretty
+    stdout = putByteString . Pretty.encodePretty Pretty.defConfig
     finish inplace fp o =
       if inplace
         then encodeFile fp o
